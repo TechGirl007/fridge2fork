@@ -367,8 +367,10 @@ const mealCost = () => parseFloat($("mealCost").value) || 0;
 function freezeLine(x) {
   const save = x.extra && x.freezable && mealCost()
     ? ` <b>That's ${x.extra} meals you won't have to buy, about ${(x.shop?.symbol || "$") + (x.extra * mealCost()).toFixed(2)}.</b>` : "";
+  // the model often starts with our label ("Best eaten fresh, as…"), so drop it rather than say it twice
+  const note = String(x.freezer || "").replace(/^\s*(best eaten fresh|freezes well|not good frozen)\b[\s.,:;!-]*/i, "");
   return `<div class="freeze ${x.freezable ? "" : "no"}">${x.freezable ? "❄️ <b>Freezes well.</b>" : "🍽️ <b>Best eaten fresh.</b>"}
-    ${esc(x.freezer)}${x.extra && x.freezable ? ` Makes ${x.extra} extra portions for the freezer.` : ""}${save}</div>`;
+    ${esc(note.charAt(0).toUpperCase() + note.slice(1))}${x.extra && x.freezable ? ` Makes ${x.extra} extra portions for the freezer.` : ""}${save}</div>`;
 }
 
 function shopLine(sh) {
