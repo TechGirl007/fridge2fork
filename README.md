@@ -41,7 +41,14 @@ Then open http://localhost:8000. On a laptop CPU (7 GB RAM, no GPU), the first i
   <em>A snapshot of the app, version 1.0</em>
 </p>
 
-To try a different open model:
+<p align="center">
+  <img width="1965" height="1576" alt="recipepdf" src="https://github.com/user-attachments/assets/978cddff-600c-4452-a0c1-e2eeff67687c" />
+  <br>
+  <em>A snapshot of a printed recipe</em>
+</p>
+
+    
+  To try a different open model:
 
 ```
 MODEL=llama3.2 python3 app.py
