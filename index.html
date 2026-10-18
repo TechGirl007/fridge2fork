@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fridge2Fork</title>
+<style>
+  :root {
+    --bg: #f7f1e8; --card: #fffdf9; --ink: #2d2620; --muted: #7a6e62; --line: #e8dccb;
+    --accent: #c4532d; --accent-ink: #ffffff; --accent-soft: #fbe6dc;
+    --herb: #4f7a45; --herb-soft: #e5efdf; --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 8px 24px rgba(60, 40, 20, .07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1916; --card: #26221e; --ink: #f1e9de; --muted: #a99d90; --line: #3b342d;
+      --accent: #ee8a63; --accent-ink: #2a120a; --accent-soft: #3d261c;
+      --herb: #93c486; --herb-soft: #26331f; --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 780px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1, h2, .brand { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; }
+
+  /* top toolbar with the cupboard dropdowns */
+  .bar { position: sticky; top: 0; z-index: 10; background: var(--card); border-bottom: 1px solid var(--line); }
+  .bar-in { max-width: 780px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 8px; }
+  .brand { font-weight: 700; font-size: 1.15rem; margin-right: auto; white-space: nowrap; }
+  .tool { font: inherit; font-size: .95rem; padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+          background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+  .tool[aria-expanded=true] { border-color: var(--accent); color: var(--accent); }
+  .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; margin-left: 2px;
+           border-radius: 999px; background: var(--herb-soft); color: var(--herb); font-size: .8rem; font-weight: 700; }
+  .panel { position: absolute; left: 0; right: 0; top: 100%; max-width: 780px; margin: 6px auto 0; padding: 0 16px; }
+  .panel > div { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px;
+                 box-shadow: var(--shadow); max-height: 75vh; overflow: auto; }
+  .panel h3 { margin: 0 0 2px; font-size: 1.05rem; }
+  .panel h4 { margin: 18px 0 8px; font-size: .95rem; }
+  .panel .hint { color: var(--muted); font-size: .9rem; margin: 0 0 12px; }
+
+  header { text-align: center; margin-bottom: 26px; }
+  .logo { font-size: 2.4rem; line-height: 1; }
+  h1 { margin: 8px 0 4px; font-size: 2.3rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 auto; max-width: 34em; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+          padding: 22px; box-shadow: var(--shadow); margin-bottom: 18px; }
+  .step { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; }
+  .step b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+            background: var(--accent); color: var(--accent-ink); font-size: .85rem; flex: none; }
+  .step h3 { margin: 0; font-size: 1.1rem; }
+  .note { color: var(--muted); font-size: .9rem; margin: 10px 0 0; }
+
+  [hidden] { display: none !important; }
+  textarea, select, input[type=text], input[type=number] {
+    width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  textarea { min-height: 96px; resize: vertical; }
+  .more { text-align: center; }
+  .tag { margin: 2px 0 6px; color: var(--herb); font-weight: 600; }
+  .freeze { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); font-size: .95rem; }
+  .freeze.no { color: var(--muted); }
+  .side { margin-top: 14px; padding: 4px 14px 2px; border-left: 3px solid var(--herb); border-radius: 0 12px 12px 0; background: var(--bg); }
+  .shop { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--herb-soft); font-size: .95rem; }
+  .shop b { color: var(--herb); }
+  .shop .over { color: var(--accent); font-weight: 600; }
+  .spec-add { display: grid; grid-template-columns: 1fr 6.5em auto; gap: 8px; }
+  .spec-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .spec-list li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .spec-list .nm { margin-right: auto; }
+  .spec-list .pr { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .matches { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .matches:empty { display: none; }
+  .matches .lbl { font-size: .9rem; color: var(--herb); font-weight: 600; }
+  .matches .btn small { color: var(--muted); }
+  .matches .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .matches .btn[aria-pressed="true"] small { color: inherit; }
+  .step .clear { margin-left: auto; font-size: .9rem; }
+  textarea:focus, select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { position: relative; }
+  .pill input { position: absolute; opacity: 0; pointer-events: none; }
+  .pill span { display: inline-block; padding: 6px 14px; border-radius: 999px; cursor: pointer; user-select: none;
+               border: 1px solid var(--line); background: var(--bg); color: var(--muted); transition: all .15s; }
+  .pill input:checked + span { background: var(--herb-soft); border-color: var(--herb); color: var(--herb); font-weight: 600; }
+  .pill input:checked + span::before { content: "✓ "; }
+  .pill input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .add { display: flex; gap: 8px; margin-top: 14px; }
+  .add input { flex: 1; }
+  .btn { font: inherit; font-size: .95rem; padding: 7px 14px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+         background: var(--card); color: var(--ink); border: 1px solid var(--line); font-weight: 600; }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { color: var(--herb); border-color: var(--herb); cursor: default; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .links { margin-top: 10px; font-size: .9rem; color: var(--muted); }
+  .link { font: inherit; background: none; border: 0; color: var(--accent); padding: 0; text-decoration: underline; cursor: pointer; }
+
+  /* My recipes panel */
+  .saved { list-style: none; margin: 0; padding: 0; }
+  .saved > li { border-bottom: 1px solid var(--line); }
+  .saved summary, .group > summary { cursor: pointer; list-style: none; padding: 7px 0; }
+  .saved summary::-webkit-details-marker, .group > summary::-webkit-details-marker { display: none; }
+  .group { border-top: 1px solid var(--line); }
+  .group > summary h4 { display: inline; color: var(--accent); }
+  .group > summary { padding: 12px 0; }
+  .saved-group > summary h4::after { content: " ▸"; color: var(--muted); }
+  .saved-group[open] > summary h4::after { content: " ▾"; }
+  .saved { max-height: 45vh; overflow: auto; }
+  #favSearch { margin-bottom: 6px; }
+  .saved summary::before { content: "▸"; display: inline-block; width: 1.2em; color: var(--muted); transition: transform .15s; }
+  .saved details[open] > summary::before { transform: rotate(90deg); }
+  .saved summary { display: flex; align-items: baseline; gap: 6px; }
+  .saved .nm { font-weight: 600; }
+  .saved .del { margin-left: auto; align-self: center; background: none; border: 0; cursor: pointer; font-size: 1rem;
+                padding: 2px 6px; border-radius: 8px; opacity: .55; }
+  .saved .del:hover, .saved .del:focus-visible { opacity: 1; background: var(--accent-soft); }
+  .saved summary small { color: var(--muted); }
+  .saved .body { padding: 0 0 14px 1.2em; }
+  .saved .body ol { margin: 10px 0; padding-left: 1.3em; }
+  .saved .body li { margin: 4px 0; }
+  .saved .act { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .add-recipe .form-grid { padding-bottom: 12px; }
+  .empty { color: var(--muted); font-style: italic; }
+  .form-grid { display: grid; gap: 8px; }
+  .form-grid textarea { min-height: 80px; }
+  .form-grid .act { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+  .err { color: var(--accent); font-size: .9rem; margin-right: auto; }
+  .import { background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; padding: 12px; }
+  .import textarea { min-height: 60px; background: var(--card); }
+  .import .act { margin-top: 8px; }
+  .msg { color: var(--muted); font-size: .9rem; margin-right: auto; }
+  .src { margin: 8px 0 0; font-size: .95rem; }
+  .src a, .saved a { color: var(--accent); }
+  .saved a.btn { text-decoration: none; }
+
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 4px; background: var(--bg);
+         border: 1px solid var(--line); border-radius: 12px; }
+  .seg label { text-align: center; padding: 8px; border-radius: 9px; cursor: pointer; color: var(--muted); }
+  .seg input { position: absolute; opacity: 0; }
+  .seg label:has(input:checked) { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 14px; }
+  .row label { display: block; font-size: .85rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+
+  #go { width: 100%; padding: 15px; font: inherit; font-size: 1.1rem; font-weight: 700; border: 0; border-radius: 14px;
+        background: var(--accent); color: var(--accent-ink); cursor: pointer; box-shadow: var(--shadow); }
+  #go:hover { filter: brightness(1.05); }
+  #go:disabled { opacity: .7; cursor: wait; }
+
+  #status { text-align: center; color: var(--muted); margin: 20px 0; min-height: 1.5em; }
+  .pot { display: inline-block; animation: bob 1s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-4px); } }
+
+  .recipe { border-left: 5px solid var(--accent); scroll-margin-top: 70px; }
+  .recipe h2 { margin: 0; font-size: 1.5rem; line-height: 1.25; }
+  .top { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+  .time { flex: none; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: .9rem;
+          padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  .based { display: inline-block; margin-top: 6px; font-size: .9rem; color: var(--herb); font-weight: 600; }
+  .pitch { color: var(--muted); font-style: italic; margin: 6px 0 16px; }
+  .label { font-size: .75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .chip { background: var(--herb-soft); color: var(--herb); border-radius: 999px; padding: 2px 11px; font-size: .9rem; }
+  .need .chip, .swap .chip { background: transparent; color: var(--muted); border: 1px dashed var(--muted); }
+  ol { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+  ol li { counter-increment: s; position: relative; padding: 0 0 10px 36px; }
+  ol li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 24px; height: 24px; border-radius: 50%;
+                  display: grid; place-items: center; font-size: .8rem; font-weight: 700; border: 1px solid var(--line); color: var(--muted); }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+  footer { color: var(--muted); font-size: .85rem; text-align: center; margin-top: 36px; }
+
+  /* "Save as PDF": print only the chosen recipe, on white paper */
+  #print { display: none; }
+  @media print {
+    body { background: #fff; color: #000; }
+    body > *:not(#print) { display: none !important; }
+    #print { display: block; max-width: 680px; margin: 0 auto; font-size: 12pt; }
+    #print .card { box-shadow: none; border: 0; border-left: 4pt solid #c4532d; background: #fff; padding: 0 0 0 16pt; }
+    #print .chip { background: #eef3ec; color: #2d4a28; }
+    #print .need .chip, #print .swap .chip { background: #fff; color: #555; border-color: #999; }
+    #print .made { color: #777; font-size: 9pt; margin-top: 24pt; }
+    #print .src a { color: #000; }
+    #print .src a::after { content: " (" attr(href) ")"; color: #777; font-size: 9pt; word-break: break-all; }
+  }
+
+  @media (max-width: 520px) { .brand span, .tool .lbl { display: none; } .tool { padding: 7px 10px; } }
+</style>
+</head>
+<body>
+<nav class="bar">
+  <div class="bar-in">
+    <div class="brand">🥕<span> Fridge2Fork</span></div>
+    <button type="button" class="tool" data-list="spices" aria-expanded="false" title="Spices">🧂<span class="lbl"> Spices</span> <span class="count"></span> ▾</button>
+    <button type="button" class="tool" data-list="pantry" aria-expanded="false" title="Cupboard">🥫<span class="lbl"> Cupboard</span> <span class="count"></span> ▾</button>
+    <button type="button" class="tool" data-list="saved" aria-expanded="false" title="My recipes">📖<span class="lbl"> My recipes</span> <span class="count"></span> ▾</button>
+  </div>
+  <div class="panel" id="panel" hidden></div>
+</nav>
+
+<main>
+  <header>
+    <div class="logo" aria-hidden="true">🥕🍳</div>
+    <h1>Fridge2Fork</h1>
+    <p class="tag">From fridge to fork, before it goes in the bin.</p>
+    <p class="sub">Tell it what's in the fridge. A local AI suggests what to cook, and nothing leaves your machine.</p>
+  </header>
+
+  <form id="f">
+    <section class="card">
+      <div class="step"><b>1</b><h3 id="step1">What's in the fridge?</h3>
+        <button type="button" class="link clear" id="clear" title="Empty the fridge list and clear the results">✕ Clear</button></div>
+      <textarea id="ingredients" placeholder="e.g. 3 eggs, half a bag of spinach, feta, stale bread, 1 lemon" required></textarea>
+      <div id="specials" hidden>
+        <div class="spec-add">
+          <input type="text" id="specName" placeholder="Item, e.g. chicken thighs 500 g" aria-label="Special">
+          <input type="number" id="specPrice" min="0" step="0.01" placeholder="Price" aria-label="Price">
+          <button type="button" class="btn" id="specAdd">+ Add</button>
+        </div>
+        <ul class="spec-list" id="specList"></ul>
+        <p class="note" id="specTotal"></p>
+      </div>
+      <p class="note" id="summary"></p>
+      <div class="matches" id="matches"></div>
+    </section>
+
+    <section class="card">
+      <div class="step"><b>2</b><h3>How do you want it?</h3></div>
+      <div class="seg">
+        <label><input type="radio" name="mode" value="home" checked>🏠 Home cook</label>
+        <label><input type="radio" name="mode" value="cafe">☕ Cafe special</label>
+        <label><input type="radio" name="mode" value="shop">🛒 On a budget</label>
+      </div>
+      <div class="row">
+        <div>
+          <label for="meal">Meal</label>
+          <select id="meal">
+            <option value="">Any</option>
+            <option value="breakfast">🌅 Breakfast</option><option value="lunch">🥪 Lunch</option>
+            <option value="dinner">🌙 Dinner</option><option value="snack">🍪 Snack</option>
+          </select>
+        </div>
+        <div>
+          <label for="cuisine">Cuisine</label>
+          <select id="cuisine">
+            <option value="">Any</option>
+            <option>Mexican</option><option>Japanese</option><option>Spanish</option><option>Dutch</option>
+            <option>Italian</option><option>French</option><option>Greek</option><option>Indian</option>
+            <option>Chinese</option><option>Thai</option><option>Korean</option><option>Middle Eastern</option>
+            <option>British</option><option>American</option>
+          </select>
+        </div>
+        <div id="budgetBox" hidden>
+          <label for="budget">Budget</label>
+          <input id="budget" type="number" min="0" step="0.5" placeholder="e.g. 10">
+        </div>
+        <div>
+          <label for="dish">Kind of dish</label>
+          <select id="dish">
+            <option value="">🎲 Surprise me</option>
+            <option>soup</option><option>curry</option><option>stir-fry</option><option>salad</option>
+            <option>pasta dish</option><option>rice dish</option><option>noodle dish</option><option>wraps or tacos</option>
+            <option>fritters</option><option>pie or tart</option><option>omelette or frittata</option><option>sandwich or toastie</option>
+            <option>pancakes</option><option>dip</option><option>stew</option><option>bake</option>
+            <option value="cottage pie">cottage pie (mash topping)</option><option>gratin</option>
+          </select>
+        </div>
+        <div>
+          <label for="diet">Diet</label>
+          <select id="diet">
+            <option value="">Anything</option>
+            <option>vegetarian</option><option>vegan</option>
+            <option>gluten-free</option><option>dairy-free</option>
+          </select>
+        </div>
+        <div>
+          <label for="max_time">Max minutes</label>
+          <select id="max_time"><option>15</option><option>30</option><option selected>45</option><option>90</option></select>
+        </div>
+        <div>
+          <label for="servings">Servings</label>
+          <input id="servings" type="number" min="1" max="50" value="2">
+        </div>
+        <div>
+          <label for="count">Ideas</label>
+          <select id="count"><option value="1">1 at a time (faster)</option><option value="2">2 at once</option></select>
+        </div>
+        <div>
+          <label for="side">Side dish</label>
+          <select id="side"><option value="auto">Auto: use up what's left</option>
+            <option value="1">🥗 Always add a side</option><option value="">No side</option></select>
+        </div>
+        <div>
+          <label for="extra">❄️ Extra to freeze</label>
+          <select id="extra"><option value="0">None</option><option value="2">+2 portions</option>
+            <option value="4">+4 portions</option><option value="6">+6 portions</option></select>
+        </div>
+        <div id="mealCostBox" hidden>
+          <label for="mealCost">A meal usually costs</label>
+          <input id="mealCost" type="number" min="0" step="0.5" placeholder="e.g. 8">
+        </div>
+        <div>
+          <label for="base">Based on</label>
+          <select id="base"></select>
+        </div>
+      </div>
+    </section>
+
+    <button id="go">Suggest recipes</button>
+  </form>
+
+  <p id="status" aria-live="polite"></p>
+  <div id="out"></div>
+  <footer>Runs on an open-weight model through Ollama, on your own computer.</footer>
+</main>
+
+<div id="print"></div>
+
+<script>
+// opened straight from disk (file://) -> talk to the local server directly
+const API = location.protocol === "file:" ? "http://localhost:8000" : "";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const chips = (xs) => (xs || []).map((x) => `<span class="chip">${esc(x)}</span>`).join("");
+// one per line; fall back to commas only for a single typed line
+const lines = (s) => (s.includes("\n") ? s.split("\n") : s.split(",")).map((x) => x.trim()).filter(Boolean);
+
+async function api(path, body) {
+  const r = await fetch(API + path, body ? { method: "POST", body: JSON.stringify(body) } : {})
+    .catch(() => { throw new Error("can't reach the app - is `python3 app.py` running?"); });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error);
+  return data;
+}
+
+const LISTS = {
+  spices: {
+    title: "Spices", hint: "Recipes will only use spices that are ticked.", placeholder: "Add your own, e.g. za'atar",
+    common: ["salt", "black pepper", "garlic powder", "onion powder", "paprika", "smoked paprika", "cumin",
+      "chili flakes", "curry powder", "turmeric", "Italian herbs", "oregano", "thyme", "rosemary",
+      "cinnamon", "ground ginger", "nutmeg", "bay leaves"],
+  },
+  pantry: {
+    title: "Cupboard", hint: "Tick what's in the cupboard. Oil, butter, flour and sugar are always assumed.",
+    placeholder: "Add your own, e.g. tahini",
+    common: ["stock cubes", "chicken stock", "vegetable stock", "tinned tomatoes", "tomato paste", "pasta", "rice",
+      "noodles", "tinned beans", "lentils", "coconut milk", "soy sauce", "vinegar", "mustard", "honey",
+      "peanut butter", "breadcrumbs", "oats"],
+  },
+};
+
+// remember the cupboard between visits (browser storage may be blocked, so never rely on it)
+const load = () => { try { return JSON.parse(localStorage.getItem("useitup-cupboard")); } catch { return null; } };
+const save = () => { try { localStorage.setItem("useitup-cupboard", JSON.stringify(state)); } catch {} };
+const state = load() || { spices: { custom: [], ticked: ["salt", "black pepper"] }, pantry: { custom: [], ticked: [] } };
+const all = (key) => [...LISTS[key].common, ...state[key].custom];
+
+// saved recipes live on the server in recipes.json
+let favs = [];
+let results = [];
+let seen = []; // dish names shown for this fridge, so "Different ideas" doesn't repeat them
+// an imported recipe waiting to be checked and saved; kept here so closing the panel doesn't lose it
+let draft = null, draftMsg = "";
+
+// what a meal usually costs, to show what the frozen portions save; remembered, never sent anywhere
+const mealCost = () => parseFloat($("mealCost").value) || 0;
+function freezeLine(x) {
+  const save = x.extra && x.freezable && mealCost()
+    ? ` <b>That's ${x.extra} meals you won't have to buy, about ${(x.shop?.symbol || "$") + (x.extra * mealCost()).toFixed(2)}.</b>` : "";
+  return `<div class="freeze ${x.freezable ? "" : "no"}">${x.freezable ? "❄️ <b>Freezes well.</b>" : "🍽️ <b>Best eaten fresh.</b>"}
+    ${esc(x.freezer)}${x.extra && x.freezable ? ` Makes ${x.extra} extra portions for the freezer.` : ""}${save}</div>`;
+}
+
+function shopLine(sh) {
+  const m = (n) => sh.symbol + n.toFixed(2);
+  const fit = !sh.budget ? "" : sh.cost <= sh.budget
+    ? ` · fits your ${m(sh.budget)} budget, ${m(sh.budget - sh.cost)} left`
+    : ` · <span class="over">${m(sh.cost - sh.budget)} over your ${m(sh.budget)} budget</span>`;
+  return `<div class="shop">🛒 <b>Buy:</b> ${sh.buy.length ? sh.buy.map((b) => `${esc(b.name)} ${m(b.price)}`).join(", ") : "none of the priced specials"}
+    · <b>≈ ${m(sh.cost)}</b>${sh.portions > 1 && sh.cost ? ` (${m(sh.cost / sh.portions)} a portion)` : ""}${fit}</div>`;
+}
+
+function recipeCard(x, actions) {
+  const ingredients = x.ingredients || [...(x.uses || []), ...(x.also_need || [])];
+  return `
+    <div class="top"><h2>${esc(x.name)}</h2>${x.minutes ? `<span class="time">⏱ ${esc(x.minutes)} min</span>` : ""}</div>
+    ${x.based_on ? `<span class="based">♥ Based on your “${esc(x.based_on)}”</span>` : ""}
+    ${x.pitch ? `<p class="pitch">${esc(x.pitch)}</p>` : "<p></p>"}
+    ${x.shop ? shopLine(x.shop) : ""}
+    ${x.freezer || x.extra ? freezeLine(x) : ""}
+    ${x.changes?.length ? `<div class="label">Changed from your recipe</div><div class="chips swap">${chips(x.changes)}</div>` : ""}
+    ${x.uses ? `<div class="label">Uses up</div><div class="chips">${chips(x.uses)}</div>`
+             : `<div class="label">Ingredients</div><div class="chips">${chips(ingredients)}</div>`}
+    ${x.also_need?.length ? `<div class="label">You'd also need</div><div class="chips need">${chips(x.also_need)}</div>` : ""}
+    <div class="label">Method</div>
+    <ol>${x.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+    ${x.side?.name ? `<div class="side">
+      <div class="label">🥗 On the side: ${esc(x.side.name)}</div>
+      ${x.side.uses?.length ? `<div class="chips">${chips(x.side.uses)}</div>` : ""}
+      <ol>${(x.side.steps || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>` : ""}
+    ${x.source ? `<p class="src">🔗 <a href="${esc(x.source)}" target="_blank" rel="noopener">Original recipe</a></p>` : ""}
+    ${actions || ""}`;
+}
+
+function printRecipe(x) {
+  $("print").innerHTML = `<article class="card recipe">${recipeCard(x)}<p class="made">Made with Fridge2Fork · ${new Date().toLocaleDateString()}</p></article>`;
+  const title = document.title;
+  document.title = x.name; // becomes the suggested PDF file name
+  window.print();
+  document.title = title;
+}
+
+function renderBase() {
+  const cur = $("base").value;
+  $("base").innerHTML = `<option value="">Auto (if one fits)</option><option value="none">Something new</option>` +
+    favs.map((f) => `<option value="${esc(f.name)}">♥ ${esc(f.name)}</option>`).join("");
+  $("base").value = [...$("base").options].some((o) => o.value === cur) ? cur : "";
+}
+
+let open = null;
+function renderPanel() {
+  document.querySelectorAll(".tool").forEach((b) => b.setAttribute("aria-expanded", b.dataset.list === open));
+  $("panel").hidden = !open;
+  if (!open) return;
+  if (open === "saved") return renderSaved();
+  const L = LISTS[open], S = state[open];
+  $("panel").innerHTML = `<div>
+    <h3>${L.title}</h3><p class="hint">${L.hint}</p>
+    <div class="pills">${all(open).map((s) => `
+      <label class="pill"><input type="checkbox" value="${esc(s)}" ${S.ticked.includes(s) ? "checked" : ""}><span>${esc(s)}</span></label>`).join("")}
+    </div>
+    <div class="add"><input type="text" id="newItem" placeholder="${L.placeholder}" aria-label="Add to ${L.title}"><button type="button" class="btn" id="addItem">+ Add</button></div>
+    <div class="links"><button type="button" class="link" data-act="all">Tick all</button> ·
+      <button type="button" class="link" data-act="none">Clear</button> ·
+      <button type="button" class="link" data-act="close">Done</button></div>
+  </div>`;
+}
+function renderSaved() {
+  $("panel").innerHTML = `<div>
+    <h3>My recipes</h3>
+    <p class="hint">Recipes you love. Fridge2Fork will adapt them to what's in your fridge. Saved in <code>recipes.json</code>.</p>
+    <details class="group add-recipe"${draft || !favs.length ? " open" : ""}>
+    <summary><h4>＋ Add a recipe</h4></summary>
+    <div class="form-grid">
+      <div class="import">
+        <textarea id="impSrc" placeholder="Paste a link to a recipe website, or copy and paste the whole recipe from the page"></textarea>
+        <div class="act"><span class="msg" id="impMsg">${esc(draftMsg)}</span>
+          <button type="button" class="btn" id="impGo">✨ Fill it in for me</button></div>
+      </div>
+      <input type="text" id="favName" placeholder="Name, e.g. Mum's lasagne" value="${esc(draft?.name)}">
+      <textarea id="favIng" placeholder="Ingredients, one per line or comma-separated">${esc(draft?.ingredients.join("\n"))}</textarea>
+      <textarea id="favSteps" placeholder="Steps, one per line">${esc(draft?.steps.join("\n"))}</textarea>
+      <input type="text" id="favSource" placeholder="Link to the original (optional)" value="${esc(draft?.source)}">
+      <div class="act"><span class="err" id="favErr"></span>
+        <button type="button" class="btn primary" id="favSave">Save recipe</button></div>
+    </div>
+    </details>
+    ${favs.length ? `<details class="group saved-group">
+    <summary><h4>♥ Saved recipes <span class="count">${favs.length}</span></h4></summary>
+    ${favs.length > 5 ? `<input type="search" id="favSearch" placeholder="Search your recipes" aria-label="Search your recipes">` : ""}
+    <ul class="saved">${favs.map((f, i) => `
+      <li><details>
+        <summary><span class="nm">${esc(f.name)}</span> <small>${f.ingredients.length} ingredients${f.minutes ? ` · ${esc(f.minutes)} min` : ""}</small>
+          <button type="button" class="del" data-del="${i}" title="Delete" aria-label="Delete ${esc(f.name)}">🗑</button></summary>
+        <div class="body">
+          <div class="chips">${chips(f.ingredients)}</div>
+          <ol>${f.steps.map((st) => `<li>${esc(st)}</li>`).join("")}</ol>
+          <div class="act">
+            ${f.source ? `<a class="btn" href="${esc(f.source)}" target="_blank" rel="noopener">🔗 Original</a>` : ""}
+            <button type="button" class="btn" data-pdf="${i}">📄 PDF</button>
+          </div>
+        </div>
+      </details></li>`).join("")}</ul>
+    <p class="empty" id="favNone" hidden>No saved recipe matches that.</p>
+    </details>`
+      : `<p class="empty">Nothing yet. Tap ♥ Save on a suggestion, or add a family favourite above.</p>`}
+    <div class="links"><button type="button" class="link" data-act="close">Done</button></div>
+  </div>`;
+}
+function renderCounts() {
+  document.querySelectorAll(".tool").forEach((b) => {
+    const k = b.dataset.list;
+    b.querySelector(".count").textContent = k === "saved" ? favs.length : state[k].ticked.length;
+  });
+  const s = state.spices.ticked.length, p = state.pantry.ticked.length;
+  $("summary").innerHTML = `Using ${s} spice${s === 1 ? "" : "s"} and ${p} cupboard item${p === 1 ? "" : "s"}. ` +
+    `<button type="button" class="link" data-open="spices">Spices</button> · <button type="button" class="link" data-open="pantry">Cupboard</button>`;
+}
+function setFavs(list) { favs = list; renderCounts(); renderBase(); findMatches(); }
+
+// saved recipes that fit the fridge, so the cook can pick one instead of leaving it to Auto
+let matches = [], matchTimer;
+async function findMatches() {
+  const ingredients = $("ingredients").value;
+  try { matches = favs.length && ingredients.trim() ? await api("/api/matches", { ingredients, pantry: state.pantry.ticked, spices: state.spices.ticked }) : []; } catch { matches = []; }
+  renderMatches();
+}
+function renderMatches() {
+  $("matches").innerHTML = matches.length ? `<span class="lbl">♥ From your recipes:</span>` +
+    matches.map((m) => `<button type="button" class="btn" data-match="${esc(m.name)}" aria-pressed="${$("base").value === m.name}">
+      ${esc(m.name)} <small>· you have ${m.have} of ${m.total}</small></button>`).join("") : "";
+}
+$("ingredients").addEventListener("input", () => { clearTimeout(matchTimer); matchTimer = setTimeout(findMatches, 400); });
+$("base").addEventListener("change", renderMatches);
+$("matches").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-match]");
+  if (!b) return;
+  // tap again to hand the choice back to Auto
+  $("base").value = $("base").value === b.dataset.match ? "" : b.dataset.match;
+  renderMatches();
+});
+const toggle = (key) => { open = open === key ? null : key; renderPanel(); };
+function addItem() {
+  const s = $("newItem").value.trim();
+  if (!s) return;
+  const S = state[open];
+  const known = all(open).find((x) => x.toLowerCase() === s.toLowerCase());
+  if (!known) S.custom.push(s);
+  if (!S.ticked.includes(known || s)) S.ticked.push(known || s);
+  save(); renderPanel(); renderCounts();
+  $("newItem").focus();
+}
+// saving under a name that's taken would silently overwrite the old recipe, so ask first
+function nameFor(name) {
+  const taken = (n) => favs.some((f) => f.name.toLowerCase() === n.trim().toLowerCase());
+  if (!taken(name)) return name;
+  let i = 2;
+  while (taken(`${name} (${i})`)) i++;
+  return confirm(`You already have a recipe called "${name}".\n\nOK: replace the old one\nCancel: keep both (this one is saved as "${name} (${i})")`)
+    ? name : `${name} (${i})`;
+}
+
+async function saveOwn() {
+  try {
+    setFavs(await api("/api/favourites", {
+      name: nameFor($("favName").value.trim()), ingredients: lines($("favIng").value), steps: $("favSteps").value.split("\n"),
+      source: $("favSource").value, minutes: draft?.minutes,
+    }));
+    draft = null; draftMsg = "";
+    renderPanel();
+  } catch (err) { $("favErr").textContent = err.message; }
+}
+async function importRecipe() {
+  const source = $("impSrc").value.trim();
+  if (!source) return;
+  const t0 = Date.now();
+  const say = (m) => { draftMsg = m; if ($("impMsg")) $("impMsg").textContent = m; };
+  const tick = () => say(`Reading the recipe... ${Math.round((Date.now() - t0) / 1000)}s`);
+  tick();
+  const timer = setInterval(tick, 500);
+  $("impGo").disabled = true;
+  try {
+    draft = await api("/api/import", { source });
+    clearInterval(timer);
+    say(draft.how === "recipe card" ? "Found the recipe card on the page. Check it below, then save."
+                                    : `${draft.how} read it in ${draft.seconds}s. Check it below, then save.`);
+    if (open === "saved") renderPanel();
+  } catch (err) {
+    clearInterval(timer);
+    say(err.message);
+    if ($("impGo")) $("impGo").disabled = false;
+  }
+}
+
+document.querySelectorAll(".tool").forEach((b) => b.addEventListener("click", () => toggle(b.dataset.list)));
+$("summary").addEventListener("click", (e) => {
+  if (e.target.dataset.open) { e.stopPropagation(); open = e.target.dataset.open; renderPanel(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+});
+$("panel").addEventListener("change", (e) => {
+  if (e.target.type !== "checkbox") return;
+  const S = state[open], v = e.target.value;
+  S.ticked = e.target.checked ? [...S.ticked, v] : S.ticked.filter((x) => x !== v);
+  save(); renderCounts();
+});
+$("panel").addEventListener("click", async (e) => {
+  const t = e.target, act = t.dataset.act;
+  if (t.id === "addItem") addItem();
+  if (t.id === "favSave") saveOwn();
+  if (t.id === "impGo") importRecipe();
+  if (t.dataset.pdf) printRecipe(favs[t.dataset.pdf]);
+  if (t.dataset.del) e.preventDefault(); // the bin sits in the row: don't open it as well
+  if (t.dataset.del && confirm(`Delete "${favs[t.dataset.del].name}"?`)) {
+    setFavs(await api("/api/favourites/delete", { name: favs[t.dataset.del].name }));
+    renderPanel();
+  }
+  if (act === "all") state[open].ticked = all(open);
+  if (act === "none") state[open].ticked = [];
+  if (act === "close") open = null;
+  if (act) { save(); renderPanel(); renderCounts(); }
+});
+$("panel").addEventListener("keydown", (e) => { if (e.target.id === "newItem" && e.key === "Enter") { e.preventDefault(); addItem(); } });
+// composedPath, not closest: clicks inside the panel can re-render it and detach the target
+document.addEventListener("click", (e) => {
+  if (open && !e.composedPath().some((el) => el.classList?.contains("bar"))) { open = null; renderPanel(); }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && open) { open = null; renderPanel(); } });
+
+$("out").addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.dataset.pdf) printRecipe(results[t.dataset.pdf]);
+  if (t.dataset.save) {
+    const x = results[t.dataset.save];
+    try {
+      setFavs(await api("/api/favourites", {
+        // a main with a side is saved as one recipe: "Asparagus Soup with Carrot Chips"
+        name: nameFor(x.side?.name ? `${x.name} with ${x.side.name}` : x.name), minutes: x.minutes,
+        ingredients: [...(x.uses || []), ...(x.side?.uses || []), ...(x.also_need || [])],
+        steps: [...x.steps, ...(x.side?.steps || []).map((s) => `Side: ${s}`)],
+      }));
+      t.textContent = "♥ Saved";
+      t.disabled = true;
+    } catch (err) { $("status").textContent = "Couldn't save: " + err.message; }
+  }
+});
+
+renderCounts();
+renderBase();
+api("/api/favourites").then(setFavs).catch(() => {});
+
+// guess the meal from the clock; the user can still change it
+const hour = new Date().getHours();
+$("meal").value = hour >= 5 && hour < 11 ? "breakfast" : hour < 15 ? "lunch" : hour < 21 ? "dinner" : "snack";
+
+// a fresh start: empty fridge, no old results. The spice rack and cupboard stay, since they rarely change.
+$("clear").addEventListener("click", () => {
+  $("ingredients").value = "";
+  specials = []; if (isShop()) renderSpecials();
+  $("base").value = "";
+  $("out").innerHTML = "";
+  $("status").textContent = "";
+  results = [];
+  seen = [];
+  matches = []; renderMatches();
+  (isShop() ? $("specName") : $("ingredients")).focus();
+});
+
+let lastFridge = "";
+// in the shop, step 1 is a list of reduced specials, each with its own price,
+// so the app can add up the cost. The list is written into the (hidden) ingredients box
+// as "chicken thighs $3.50, ...", which is what the server reads.
+let specials = [], fridgeText = "";
+const isShop = () => document.querySelector("input[name=mode]:checked").value === "shop";
+function renderSpecials() {
+  $("specList").innerHTML = specials.map((x, i) => `<li><span class="nm">${esc(x.name)}</span>
+    <span class="pr">$${x.price.toFixed(2)}</span>
+    <button type="button" class="btn" data-spec="${i}" aria-label="Remove ${esc(x.name)}">✕</button></li>`).join("");
+  const total = specials.reduce((t, x) => t + x.price, 0);
+  $("specTotal").textContent = specials.length
+    ? `${specials.length} special${specials.length === 1 ? "" : "s"}, $${total.toFixed(2)} if you bought them all.`
+    : "Add each reduced item and its price. The recipes will only buy some of them.";
+  $("ingredients").value = specials.map((x) => `${x.name} $${x.price.toFixed(2)}`).join(", ");
+  clearTimeout(matchTimer); matchTimer = setTimeout(findMatches, 400);
+}
+function addSpecial() {
+  const name = $("specName").value.trim(), price = parseFloat($("specPrice").value);
+  if (!name) return $("specName").focus();
+  if (!(price >= 0)) return $("specPrice").focus();
+  specials.push({ name, price });
+  $("specName").value = $("specPrice").value = "";
+  renderSpecials();
+  $("specName").focus();
+}
+$("specAdd").addEventListener("click", addSpecial);
+
+$("panel").addEventListener("input", (e) => {
+  if (e.target.id !== "favSearch") return;
+  const q = e.target.value.trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll(".saved > li").forEach((li) => {
+    li.hidden = !!q && !li.querySelector(".nm").textContent.toLowerCase().includes(q);
+    shown += !li.hidden;
+  });
+  $("favNone").hidden = shown > 0;
+});
+// Enter adds the item instead of submitting the whole form
+[$("specName"), $("specPrice")].forEach((el) => el.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  if (el === $("specName") && !$("specPrice").value) $("specPrice").focus(); else addSpecial();
+}));
+$("specList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-spec]");
+  if (b) { specials.splice(+b.dataset.spec, 1); renderSpecials(); }
+});
+
+document.querySelectorAll("input[name=mode]").forEach((r) => r.addEventListener("change", () => {
+  if (!r.checked) return;
+  const shop = r.value === "shop";
+  if (shop === !$("specials").hidden) return; // e.g. home -> cafe: nothing to swap
+  $("budgetBox").hidden = !shop;
+  $("specials").hidden = !shop;
+  $("ingredients").hidden = shop;
+  $("ingredients").required = !shop;
+  $("step1").textContent = shop ? "What's on special?" : "What's in the fridge?";
+  // keep the fridge list safe while shopping, and bring it back after
+  if (shop) { fridgeText = $("ingredients").value; renderSpecials(); $("specName").focus(); }
+  else { $("ingredients").value = fridgeText; findMatches(); }
+}));
+
+try { $("mealCost").value = localStorage.getItem("fridge2fork-mealcost") || ""; } catch {}
+$("mealCost").addEventListener("change", () => { try { localStorage.setItem("fridge2fork-mealcost", $("mealCost").value); } catch {} });
+$("extra").addEventListener("change", () => { $("mealCostBox").hidden = $("extra").value === "0"; });
+
+$("f").addEventListener("submit", (e) => { e.preventDefault(); suggest(); });
+
+// more = true: "Another idea" adds to the cards already shown instead of starting over
+async function suggest(more = false) {
+  open = null; renderPanel();
+  if (isShop() && !specials.length) {
+    $("status").textContent = "Add at least one special and its price first.";
+    return $("specName").focus();
+  }
+  if ($("ingredients").value !== lastFridge) { seen = []; more = false; }
+  lastFridge = $("ingredients").value;
+  const body = {
+    avoid: seen,
+    ingredients: $("ingredients").value,
+    spices: state.spices.ticked,
+    pantry: state.pantry.ticked,
+    base: $("base").value,
+    meal: $("meal").value,
+    cuisine: $("cuisine").value,
+    dish: $("dish").value,
+    mode: document.querySelector("input[name=mode]:checked").value,
+    budget: $("budget").value,
+    extra: $("extra").value,
+    side: $("side").value,
+    diet: $("diet").value,
+    max_time: $("max_time").value,
+    servings: $("servings").value,
+    count: $("count").value,
+  };
+  $("go").disabled = true;
+  if (more) $("more")?.remove(); else { $("out").innerHTML = ""; results = []; }
+  const t0 = Date.now();
+  const tick = () => {
+    $("status").innerHTML = `<span class="pot">🍲</span> Cooking up ${more ? "another idea" : "ideas"} on your laptop... ${Math.round((Date.now() - t0) / 1000)}s`;
+  };
+  tick();
+  const timer = setInterval(tick, 500);
+  try {
+    const data = await api("/api/recipes", body);
+    const first = results.length;
+    results = [...results, ...data.recipes];
+    seen.push(...data.recipes.map((x) => x.name));
+    const n = data.recipes.length;
+    $("status").textContent = `${n} idea${n === 1 ? "" : "s"} from ${data.model} in ${data.seconds}s, all offline.`;
+    $("out").innerHTML = results.map((x, i) => `
+      <article class="card recipe">${recipeCard(x, `
+        <div class="actions">
+          ${favs.some((f) => f.name.toLowerCase() === x.name.toLowerCase())
+            ? `<button type="button" class="btn" disabled>♥ Saved</button>`
+            : `<button type="button" class="btn" data-save="${i}">♡ Save</button>`}
+          <button type="button" class="btn" data-pdf="${i}">📄 Save as PDF</button>
+        </div>`)}
+      </article>`).join("") +
+      `<p class="more"><button type="button" class="btn" id="more">🔄 Another idea</button></p>`;
+    $("more").addEventListener("click", () => suggest(true));
+    $("out").children[first].scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    $("status").textContent = "Something went wrong: " + err.message;
+    // put "Another idea" back so the cards already shown can still be added to
+    if (more && results.length) {
+      $("out").insertAdjacentHTML("beforeend", `<p class="more"><button type="button" class="btn" id="more">🔄 Another idea</button></p>`);
+      $("more").addEventListener("click", () => suggest(true));
+    }
+  } finally {
+    clearInterval(timer);
+    $("go").disabled = false;
+  }
+}
+</script>
+</body>
+</html>
