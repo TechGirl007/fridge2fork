@@ -35,6 +35,12 @@ python3 app.py
 
 Then open http://localhost:8000. On a laptop CPU (7 GB RAM, no GPU), the first idea takes about a minute.
 
+<p align="center">
+  <img width="800" alt="Fridge2Fork: the spice rack and a recipe card that uses up the fridge" src="https://github.com/user-attachments/assets/5650b2b6-48a8-4d61-9ff7-a09c9fff856b" />
+  <br>
+  <em>A snapshot of the app, version 1.0</em>
+</p>
+
 To try a different open model:
 
 ```
